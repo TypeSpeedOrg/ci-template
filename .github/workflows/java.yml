@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  workflow_call:
+    inputs:
+      image-name:
+        type: string
+        required: true
+      dockerfile-path:
+        type: string
+        required: true
+
+jobs:
+  build-artifact:
+    runs-on: ubuntu-22.04
+    container:
+      image: maven:3.9.6-eclipse-temurin-21
+    steps:
+      - name: Fetch code
+        uses: actions/checkout@v4
+      - name: Cache Maven packages
+        uses: actions/cache@v4
+        with:
+          path: /root/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+      - name: Build jar
+        run: mvn clean package
+      - name: Save jar artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: java-app-jar
+          path: target/*.jar
+          retention-days: 1
+
+  build-image:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build-artifact
+    permissions:
+      packages: write
+      contents: read
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Fetch Dockerfile
+        uses: actions/checkout@v4
+        with:
+          repository: TypeSpeedOrg/infrastructure
+          sparse-checkout: ${{ inputs.dockerfile-path }}
+      - name: Download jar
+        uses: actions/download-artifact@v4
+        with:
+          name: java-app-jar
+          path: target/
+      - name: Build and Push Image
+        uses: TypeSpeedOrg/ci-template/.github/actions/docker-build-push@feature-ci-templates
+        with:
+          image-name: ${{ inputs.image-name }}
+          dockerfile-path: ${{ inputs.dockerfile-path }}
+          registry-token: ${{ secrets.GITHUB_TOKEN }}

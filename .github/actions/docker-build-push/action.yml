@@ -1,0 +1,35 @@
+name: 'Docker Build and Push'
+
+inputs:
+  image-name:
+    required: true
+  dockerfile-path:
+    required: true
+  registry-token:
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Prepare Container Metadata
+      id: prep
+      shell: bash
+      run: |
+        OWNER_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+        IMAGE_PATH="ghcr.io/${OWNER_LC}/${{ inputs.image-name }}"
+        echo "tags=${IMAGE_PATH}:${{ github.sha }},${IMAGE_PATH}:latest" >> $GITHUB_OUTPUT
+
+    - name: Login to GHCR
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ inputs.registry-token }}
+
+    - name: Build and Push
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ${{ inputs.dockerfile-path }}/Dockerfile
+        push: true
+        tags: ${{ steps.prep.outputs.tags }}
