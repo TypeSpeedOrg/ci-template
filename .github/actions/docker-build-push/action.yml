@@ -11,11 +11,13 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Set lowercase repository owner
+    - name: Prepare Container Metadata
+      id: prep
       shell: bash
-      run: echo "OWNER_LC=${OWNER,,}" >> ${GITHUB_ENV}
-      env:
-        OWNER_LC: '${{ github.repository_owner }}'
+      run: |
+        OWNER_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+        IMAGE_PATH="ghcr.io/${OWNER_LC}/${{ inputs.image-name }}"
+        echo "tags=${IMAGE_PATH}:${{ github.sha }},${IMAGE_PATH}:latest" >> $GITHUB_OUTPUT
 
     - name: Login to GHCR
       uses: docker/login-action@v3
@@ -30,6 +32,4 @@ runs:
         context: .
         file: ${{ inputs.dockerfile-path }}/Dockerfile
         push: true
-        tags: |
-          ghcr.io/${{ env.OWNER_LC }}/${{ inputs.image-name }}:${{ github.sha }}
-          ghcr.io/${{ env.OWNER_LC }}/${{ inputs.image-name }}:latest
+        tags: ${{ steps.prep.outputs.tags }}
